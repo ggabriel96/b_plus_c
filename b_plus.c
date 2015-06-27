@@ -5,7 +5,8 @@
 
 #define B 4
 #define NIL (-1L)
-#define INFTY 100
+// INFTY tells us that this is a "null node"
+#define INFTY 2e32
 #define INS_MAX 4
 
 #define INFO 0
@@ -51,8 +52,13 @@ void read(node_t *dest, long index) {
     if ((fread(dest, sizeof (node_t), 1, treeFile)) == 0) throw("fread failed @ read()");
 }
 
+int signalOf(long x) {
+    if (x == 0) return 0;
+    else return (int) (x / labs(x));
+}
+
 int cmp(const void *a, const void *b) {
-	return (int)(*(long *)a - *(long *)b);
+	return signalOf((*(long *)a - *(long *)b));
 }
 
 void insert(node_t **tree, int key) {
