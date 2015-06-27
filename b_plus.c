@@ -5,15 +5,17 @@
 
 #define B 4
 #define NIL (-1L)
+#define INFTY 100
+#define INS_MAX 4
 
-#define INS_MAX 10
+#define INFO 0
+#define PTR 1
 
 FILE *treeFile;
 
 typedef struct BPNode {
     int count;
-    int key[B];
-    long index[B + 1];
+    long parent, key[B][2];
 } node_t;
 
 void throw(char *message) {
@@ -23,13 +25,11 @@ void throw(char *message) {
 
 void print(node_t *node) {
     int i;
-
     printf("count: %d\n", node -> count);
+    printf("parent: %ld\n", node -> parent);
     for (i = 0; i < B; i++) {
-        printf("key[%d]: %d\n", i, node -> key[i]);
-    }
-    for (i = 0; i < B + 1; i++) {
-        printf("index[%d]: %ld\n", i, node -> index[i]);
+        printf("key[%d]: %ld\n", i, node -> key[i][INFO]);
+        printf("ptr[%d]: %ld\n", i, node -> key[i][PTR]);
     }
 }
 
@@ -51,28 +51,60 @@ void read(node_t *dest, long index) {
     if ((fread(dest, sizeof (node_t), 1, treeFile)) == 0) throw("fread failed @ read()");
 }
 
-void insert(node_t *tree, int key) {
-    node_t rd;
-    node_t *wr = malloc(sizeof (node_t));
-    wr -> count = 0;
-    wr -> key[0] = 7;
-    wr -> index[0] = NIL;
+int cmp(const void *a, const void *b) {
+	return (int)(*(long *)a - *(long *)b);
+}
 
-    write(wr, 0);
-    read(&rd, 0);
-    print(&rd);
+void insert(node_t **tree, int key) {
+    int i;
+
+    if (*tree == NULL) {
+        (*tree) = (node_t *) malloc(sizeof (node_t));
+
+        // when I don't yet have a tree, the first element (root)
+        // will have 1 key/info pointing to nowhere (because it is
+        // a leaf, which contains the information itself)
+        (*tree) -> count = 1;
+        (*tree) -> parent = NIL;
+        (*tree) -> key[0][INFO] = key;
+        (*tree) -> key[0][PTR] = NIL;
+
+        // just initializing everything to "nonexistant"
+        for (i = 1; i < B; i++) {
+            (*tree) -> key[i][INFO] = (long) INFTY;
+            (*tree) -> key[i][PTR] = NIL;
+        }
+
+        // writing it to disk at position 0 (L is for long)
+        // because it is the root
+        write(*tree, 0L);
+    }
+    else {
+        for (i = 0; i < B; i++) {
+            if ((*tree) -> key[i][INFO] == (long) INFTY) {
+                (*tree) -> key[i][INFO] = key;
+                (*tree) -> key[i][PTR] = NIL;
+                (*tree) -> count++;
+                // the matrix to sort, quantity of lines, size of each line, comparing function
+                qsort((*tree) -> key, B, sizeof (long) * 2, &cmp);
+                break;
+            }
+        }
+    }
 }
 
 int main(int argc, char const *argv[]) {
     int i;
-    node_t root;
-    char filename[] = {'t', 'r', 'e', 'e', '.', 't', 'x', 't'}; // ?
+    node_t *root = NULL;
+    char filename[] = "tree.txt";
 
     treeFile = fopen(filename, "w+b");
     if (treeFile != NULL) {
-        for (i = 0; i < INS_MAX; i++) {
-            printf("i: %d\n", i);
+        // insert(root, 7);
+        for (i = INS_MAX - 1; i >= 0; i--) {
             insert(&root, i);
+            print(root);
+            printf("------\n");
         }
     }
     else {
