@@ -13,10 +13,11 @@
 #define PTR 1
 
 FILE *treeFile;
+long index;
 
 typedef struct BPNode {
     int count;
-    long parent, key[B][2];
+    long index, parent, key[B][2];
 } node_t;
 
 void throw(char *message) {
@@ -71,6 +72,7 @@ void insert(node_t **tree, int key) {
         // will have 1 key/info pointing to nowhere (because it is
         // a leaf, which contains the information itself)
         (*tree) -> count = 1;
+        (*tree) -> index = index++;
         (*tree) -> parent = NIL;
         (*tree) -> key[0][INFO] = key;
         (*tree) -> key[0][PTR] = NIL;
@@ -96,7 +98,68 @@ void insert(node_t **tree, int key) {
                 break;
             }
         }
+
+        addFix(tree);
     }
+}
+
+void addFix(node_t **node) {
+    int i, j;
+    long firstKey = NIL;
+    node_t *parent = NULL, *left = NULL, *right = NULL, *tmp = NULL;
+
+    if ((*node) -> parent != NIL) {
+        parent = (node_t *) malloc(sizeof (node_t));
+        read(parent, (*node) -> parent);
+
+        if (parent -> key[0][INFO] > (*node) -> key[0][INFO]) {
+            parent -> key[0][INFO] = (*node) -> key[0][INFO];
+        }
+    }
+
+    if ((*node) -> count >= B) {
+        firstKey = (*node) -> key[0][INFO];
+
+        for (i = 0; i < B / 2; i++) {
+            insert(&left, (*node) -> key[i][INFO]);
+            left -> key[i][PTR] = (*node) -> key[i][PTR];
+
+            // updating children's parent
+            if (left -> key[i][PTR] != NIL) {
+                tmp = (node_t *) malloc(sizeof (node_t));
+                read(tmp, left -> key[i][PTR]);
+
+                tmp -> parent = left -> index;
+                write(tmp, left -> key[i][PTR]);
+
+                free(tmp);
+                tmp = NULL;
+            }
+        }
+
+        for (j = 0; i < B; i++, j++) {
+            insert(&right, (*node) -> key[i][INFO]);
+            right -> key[j][PTR] = (*node) -> key[i][PTR];
+
+            // updating children's parent
+            if (right -> key[i][PTR] != NIL) {
+                tmp = (node_t *) malloc(sizeof (node_t));
+                read(tmp, right -> key[i][PTR]);
+
+                tmp -> parent = right -> index;
+                write(tmp, right -> key[i][PTR]);
+
+                free(tmp);
+                tmp = NULL;
+            }
+        }
+
+        if ((*node) -> parent == NIL) {
+        }
+    }
+
+    free(parent);
+    parent = NULL;
 }
 
 int main(int argc, char const *argv[]) {
@@ -104,6 +167,7 @@ int main(int argc, char const *argv[]) {
     node_t *root = NULL;
     char filename[] = "tree.txt";
 
+    index = 0;
     treeFile = fopen(filename, "w+b");
     if (treeFile != NULL) {
         // insert(root, 7);
