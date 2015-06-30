@@ -12,13 +12,17 @@
 #define INFO 0
 #define PTR 1
 
-FILE *treeFile;
-long index;
-
 typedef struct BPNode {
     int count;
     long index, parent, key[B][2];
 } node_t;
+
+FILE *treeFile;
+node_t *root;
+long diskIndex;
+
+void addFix(node_t **node);
+void insert(node_t **tree, long key);
 
 void throw(char *message) {
     printf("%s\n", message);
@@ -62,7 +66,24 @@ int cmp(const void *a, const void *b) {
 	return signalOf((*(long *)a - *(long *)b));
 }
 
-void insert(node_t **tree, int key) {
+void delete(node_t **tree, long key) {
+    int i;
+
+    for (i = 0; i < B; i++) {
+        if ((*tree) -> key[i][INFO] == key) {
+            (*tree) -> key[i][INFO] = (long) INFTY;
+            (*tree) -> key[i][PTR] = NIL;
+            (*tree) -> count--;
+            // the matrix to sort, quantity of lines, size of each line, comparing function
+            qsort((*tree) -> key, B, sizeof (long) * 2, &cmp);
+            break;
+        }
+    }
+
+    // delFix();
+}
+
+void insert(node_t **tree, long key) {
     int i;
 
     if (*tree == NULL) {
@@ -72,7 +93,7 @@ void insert(node_t **tree, int key) {
         // will have 1 key/info pointing to nowhere (because it is
         // a leaf, which contains the information itself)
         (*tree) -> count = 1;
-        (*tree) -> index = index++;
+        (*tree) -> index = diskIndex++;
         (*tree) -> parent = NIL;
         (*tree) -> key[0][INFO] = key;
         (*tree) -> key[0][PTR] = NIL;
@@ -155,24 +176,61 @@ void addFix(node_t **node) {
         }
 
         if ((*node) -> parent == NIL) {
+            // tmp = NULL;
+            // first keys of left and right
+            insert(&tmp, left -> key[0][INFO]);
+            insert(&tmp, right -> key[0][INFO]);
+
+            left -> parent = tmp -> index;
+            right -> parent = tmp -> index;
+
+            root = tmp;
+            tmp = NULL;
         }
+        else {
+            delete(&parent, firstKey);
+            insert(&parent, left -> key[0][INFO]);
+            insert(&parent, right -> key[0][INFO]);
+
+            left -> parent = parent -> index;
+            right -> parent = parent -> index;
+        }
+
+        write(left, left -> index);
+        write(right, right -> index);
+
+        free(*node);
+        *node = NULL;
+        node = NULL;
     }
 
-    free(parent);
-    parent = NULL;
+    printf("> PARENT:\n");
+    if (parent != NULL) print(parent);
+    printf("> LEFT:\n");
+    if (left != NULL) print(left);
+    printf("> RIGHT:\n");
+    if (right != NULL) print(right);
+
+    if (parent != NULL) {
+        write(parent, parent -> index);
+        addFix(&parent);
+        free(parent);
+        parent = NULL;
+    }
 }
 
 int main(int argc, char const *argv[]) {
     int i;
-    node_t *root = NULL;
     char filename[] = "tree.txt";
 
-    index = 0;
+    root = NULL;
+    diskIndex = 0;
     treeFile = fopen(filename, "w+b");
     if (treeFile != NULL) {
         // insert(root, 7);
         for (i = INS_MAX - 1; i >= 0; i--) {
             insert(&root, i);
+            printf("------\n");
             print(root);
             printf("------\n");
         }
