@@ -53,6 +53,9 @@ node_t * newNode() {
 
 void print(node_t *node) {
     int i;
+
+    if (node == NULL) return;
+
     printf("index: %ld\n", node -> index);
     printf("parent: %ld\n", node -> parent);
     printf("count: %d\n", node -> count);
@@ -63,30 +66,21 @@ void print(node_t *node) {
 }
 
 void write(node_t *node, long index) {
-    printf("\nwrite index: %ld\n", index);
     // moving to "index" on "treeFile" file
     // from SEEK_SET (beginning of the file)
     // if successful, fseek returns 0
-    if (fseek(treeFile, index, SEEK_SET)) throw("fseek failed @ write()");
+    if (fseek(treeFile, index * sizeof (node_t), SEEK_SET)) throw("fseek failed @ write()");
     if (fwrite(node, sizeof (node_t), 1, treeFile) == 0) throw("fwrite failed @ write()");
-
-    read(node, index);
-    print(node);
-    printf("\n");
 }
 
 void read(node_t *dest, long index) {
-    printf("\nread index: %ld\n", index);
     // moving to "index" on "treeFile" file
     // from SEEK_SET (beginning of the file)
     // if successful, fseek returns 0
-    if (fseek(treeFile, index, SEEK_SET)) throw("fseek failed @ read()");
+    if (fseek(treeFile, index * sizeof (node_t), SEEK_SET)) throw("fseek failed @ read()");
     // reads 1 node_t from "treeFile" and stores it into "dest"
     // fread returns the number of elements read
     if ((fread(dest, sizeof (node_t), 1, treeFile)) == 0) throw("fread failed @ read()");
-
-    print(dest);
-    printf("\n");
 }
 
 int signalOf(long x) {
@@ -115,28 +109,75 @@ void delete(node_t **tree, long key) {
     // delFix();
 }
 
+node_t * find(node_t *node, long key) {
+    int i;
+    long toRead;
+
+    if (node != NULL) {
+        for (i = 0; i < B; i++) {
+            if (node -> key[i][INFO] > key) {
+                if (i > 0) {
+                    printf(">>>> 1\n");
+                    toRead = node -> key[i - 1][PTR];
+                    node = (node_t *) malloc(sizeof (node_t));
+                    read(node, toRead);
+                    i = -1;
+                }
+                else {
+                    if (node -> key[i][PTR] == NIL) {
+                        printf(">>>> 2\n");
+                        return node;
+                    }
+                    else {
+                        printf(">>>> 3\n");
+                        read(node, node -> key[i][PTR]);
+                        i = -1;
+                    }
+                }
+            }
+            else if (node -> key[i][INFO] == key) {
+                if (node -> key[i][PTR] == NIL) {
+                    return node;
+                }
+                else {
+                    toRead = node -> key[i][PTR];
+                    node = (node_t *) malloc(sizeof (node_t));
+                    read(node, toRead);
+                    i = -1;
+                }
+            }
+        }
+    }
+
+    return NULL;
+}
+
 void insert(node_t **tree, long key, long ptr) {
     int i;
+    node_t *node = NULL;
 
     if (*tree == NULL) (*tree) = newNode();
+    node = find(*tree, key);
+
+    print(node);
 
     for (i = 0; i < B; i++) {
-        if ((*tree) -> key[i][INFO] == (long) INFTY) {
-            (*tree) -> key[i][INFO] = key;
-            (*tree) -> key[i][PTR] = ptr;
-            (*tree) -> count++;
+        if (node -> key[i][INFO] == (long) INFTY) {
+            node -> key[i][INFO] = key;
+            node -> key[i][PTR] = ptr;
+            node -> count++;
             // the matrix to sort, quantity of lines, size of each line, comparing function
-            qsort((*tree) -> key, B, sizeof (long) * 2, &cmp);
+            qsort(node -> key, B, sizeof (long) * 2, &cmp);
             break;
         }
     }
 
-    addFix(tree);
-    write(*tree, (*tree) -> index);
+    addFix(&node);
+    write(node, node -> index);
 }
 
 void addFix(node_t **node) {
-    int i, j;
+    int i, j, changedParent = 0;
     long firstKey = NIL;
     node_t *parent = NULL, *left = NULL, *right = NULL, *tmp = NULL;
 
@@ -146,6 +187,7 @@ void addFix(node_t **node) {
 
         if (parent -> key[0][INFO] > (*node) -> key[0][INFO]) {
             parent -> key[0][INFO] = (*node) -> key[0][INFO];
+            changedParent = 1;
         }
     }
 
@@ -213,7 +255,7 @@ void addFix(node_t **node) {
         write(right, right -> index);
     }
 
-    if (parent != NULL) {
+    if (parent != NULL && changedParent) {
         write(parent, parent -> index);
         addFix(&parent);
         free(parent);
@@ -223,41 +265,38 @@ void addFix(node_t **node) {
 
 int main(int argc, char const *argv[]) {
     int i;
-    char filename[] = "tree.txt";
+    char filename[] = "bptree.bin";
 
-    root = NULL;
     diskIndex = 0;
+    root = newNode();
     treeFile = fopen(filename, "w+b");
     if (treeFile != NULL) {
         // insert(root, 7);
         for (i = INS_MAX - 1; i >= 0; i--) {
             insert(&root, i, NIL);
-            // printf("------\n");
-            // print(root);
-            // printf("------\n");
         }
     }
     else {
         printf("Bullshit\n");
     }
 
-    graphTree(root);
     // printTree(root);
+    graphTree(root);
+
     free(root);
     root = NULL;
-
     return 0;
 }
 
 void toString(node_t *node) {
     int i;
 
-    printf("[");
+    printf("{");
     for (i = 0; i < B && node -> key[i][INFO] != (long) INFTY; i++) {
         printf("%ld", node -> key[i][INFO]);
         if (i + 1 < B && node -> key[i + 1][INFO] != (long) INFTY) printf(", ");
     }
-    printf("]");
+    printf("}");
 }
 
 void graph(node_t *node) {
@@ -275,9 +314,9 @@ void graph(node_t *node) {
             free(child);
             child = NULL;
         }
-        else {
-            printf("\t\""); toString(node); printf("\" -> \"null\" [label = \"%ld\"];\n", node -> key[i][INFO]);
-        }
+        // else {
+        //     printf("\t\""); toString(node); printf("\" -> \"null\" [label = \"%ld\"];\n", node -> key[i][INFO]);
+        // }
     }
 }
 
